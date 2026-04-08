@@ -21,7 +21,7 @@ app.use(express.json());
 app.set("trust proxy", 1);
 app.use(
   rateLimit({
-    windowsMs: 15 * 60 * 100,
+    windowMs: 15 * 60 * 1000,
     max: 100,
   })
 );

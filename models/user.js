@@ -4,8 +4,13 @@ const validator = require("validator");
 
 const authSchema = new mongoose.Schema(
   {
-
-
+    username: {
+      type: String,
+      required: [true, "Username is required"],
+    },
+    photo: {
+      type: String,
+    },
     email: {
       type: String,
       required: [true, "Email is required"],
@@ -35,7 +40,7 @@ const authSchema = new mongoose.Schema(
       minlength: 5,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 authSchema.pre("save", async function (next) {
