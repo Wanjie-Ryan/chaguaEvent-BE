@@ -7,7 +7,7 @@ const {
   UpdateListing,
   DeleteListing,
 } = require("../controller/receiver");
-const AuthMiddleware = require("../middleware/middleware");
+const { AuthMiddleware } = require("../middleware/middleware");
 
 router.route("/").get(GetAllListings).post(AuthMiddleware, CreateListing);
 router.route("/my").get(AuthMiddleware, GetMyListings);

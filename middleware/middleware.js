@@ -4,32 +4,29 @@ const { StatusCodes } = require("http-status-codes");
 const AuthMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  // console.log(authHeader)
-
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(StatusCodes.UNAUTHORIZED).send("No Token was provided");
+    return res.status(StatusCodes.UNAUTHORIZED).json({ msg: "No Token provided" });
   }
 
   const token = authHeader.split(" ")[1];
-  // console.log(token)
 
   try {
     const decoded = jwt.verify(token, process.env.token);
-    // console.log(decoded)
-    const { userId } = decoded;
-    req.user = { userId };
+    req.user = { userId: decoded.userId, role: decoded.role };
     next();
   } catch (err) {
-    // console.log(err)
-
-    if (err instanceof jwt.JsonWebTokenError) {
-      return res.status(StatusCodes.UNAUTHORIZED).send("Invalid token");
-    }
-
-    return res
-      .status(StatusCodes.UNAUTHORIZED)
-      .send("Not authorized to access this route");
+    return res.status(StatusCodes.UNAUTHORIZED).json({ msg: "Not authorized" });
   }
 };
 
-module.exports = AuthMiddleware;
+// RBAC Middleware
+const Authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(StatusCodes.FORBIDDEN).json({ msg: "Unauthorized access" });
+    }
+    next();
+  };
+};
+
+module.exports = { AuthMiddleware, Authorize };

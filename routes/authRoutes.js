@@ -1,18 +1,31 @@
 const express = require("express");
 const router = express.Router();
 const {
-  Register,
+  ClientRegister,
   Login,
+  AdminLogin,
+  AdminCreateProvider,
   UpdateProfile,
+  UpdatePassword,
+  UpdateUsername,
   GetLoggedInUser,
-  verifyToken,
 } = require("../controller/auth");
-const AuthMiddleware = require("../middleware/middleware");
+const { AuthMiddleware, Authorize } = require("../middleware/middleware");
 
-router.route("/register").post(Register);
-router.route("/login").post(Login);
-router.route("/updateprofile").put(AuthMiddleware, UpdateProfile);
-router.route("/getLoggedInUser").get(AuthMiddleware, GetLoggedInUser);
-router.route("/verify").get(AuthMiddleware, verifyToken);
+// --- PUBLIC ROUTES (CLIENTS & PROVIDERS) ---
+router.post("/register", ClientRegister);
+router.post("/login", Login);
+
+// --- ADMIN ROUTES ---
+router.post("/admin/login", AdminLogin);
+router.post("/admin/create-provider", AuthMiddleware, Authorize("admin"), AdminCreateProvider);
+
+// --- SHARED PROTECTED ROUTES ---
+router.get("/me", AuthMiddleware, GetLoggedInUser);
+router.put("/profile", AuthMiddleware, UpdateProfile);
+
+// Specific self-management for Providers/Clients
+router.put("/update-password", AuthMiddleware, UpdatePassword);
+router.patch("/update-username", AuthMiddleware, UpdateUsername);
 
 module.exports = router;

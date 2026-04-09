@@ -1,221 +1,255 @@
 const AuthModel = require("../models/user");
+const ProfileModel = require("../models/profile");
 const { StatusCodes } = require("http-status-codes");
 const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
 
-const Register = async (req, res) => {
+// 1. CLIENT REGISTER (Implicitly sets 'client' role)
+const ClientRegister = async (req, res) => {
   try {
-    const { username, email, role, password } = req.body;
+    const { username, email, password } = req.body;
 
-    if (!username || !email || !role || !password) {
+    console.log("Client Register Attempt:", email, username);
+
+    if (!username || !email || !password) {
       return res
         .status(StatusCodes.BAD_REQUEST)
-        .json({ msg: "Please fill all the fields" });
+        .json({ msg: "Please provide username, email, and password" });
     }
 
-    const newUser = await AuthModel.create(req.body);
+    // Hash is handled by UserSchema.pre('save')
+    const user = await AuthModel.create({
+      email,
+      password,
+      role: "client",
+    });
+
+    // Create Profile
+    await ProfileModel.create({
+      userId: user._id,
+      username,
+    });
 
     return res
       .status(StatusCodes.CREATED)
-      .json({ msg: "User created successfully" });
+      .json({ msg: "Client registered successfully", data: { email: user.email } });
   } catch (err) {
-    if (err.name === "ValidationError") {
-      return res
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ msg: "Validation error: " + err.message });
+    console.log("Register error:", err);
+    if (err.code === 11000) {
+      return res.status(StatusCodes.CONFLICT).json({ msg: "Email or Username already exists" });
     }
-
-    // Handle duplicate key error (e.g., duplicate email)
-    if (err.code && err.code === 11000) {
-      const field = Object.keys(err.keyValue)[0];
-      return res.status(StatusCodes.CONFLICT).json({
-        msg: `${field} already exists, please choose a different one`,
-      });
-    }
-
-    // console.error(err);
     return res
       .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ msg: "Something went wrong, try again later" });
+      .json({ msg: "Registration failed" });
   }
 };
 
+// 2. ADMIN & PROVIDER LOGIN (Shared for multi-portal access)
 const Login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log("Login attempt:", email);
+
     if (!email || !password) {
       return res
         .status(StatusCodes.BAD_REQUEST)
-        .json({ msg: "Provide all the fields" });
+        .json({ msg: "Please provide email and password" });
     }
 
-    const UserEmail = await AuthModel.findOne({ email });
-
-    if (!UserEmail) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ msg: "The Email Provided cannot be found" });
+    const user = await AuthModel.findOne({ email });
+    if (!user) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({ msg: "Invalid email or password" });
     }
 
-    const correctPassword = await UserEmail.checkpwd(password);
-
-    if (!correctPassword) {
-      return res
-        .status(StatusCodes.UNAUTHORIZED)
-        .json({ msg: "Incorrect password" });
-    }
-    // console.log(UserEmail);
-
-    const UserLogin = UserEmail.toObject();
-    delete UserLogin.password;
-    delete UserLogin.email;
-
-    try {
-      const token = jwt.sign({ userId: UserLogin._id }, process.env.token, {
-        expiresIn: "1d",
-      });
-
-      return res
-        .status(StatusCodes.OK)
-        .json({ msg: `Login successful`, UserLogin, userToken: token });
-    } catch (tokenError) {
-      //   console.error("Token generation error:", tokenError);
-      return res
-        .status(StatusCodes.INTERNAL_SERVER_ERROR)
-        .json({ msg: "Error generating token, please try again later" });
-    }
-  } catch (err) {
-    // console.log(err);
-
-    if (err.name === "ValidationError") {
-      return res
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ msg: "Validation error: " + err.message });
+    const isMatch = await user.checkpwd(password);
+    if (!isMatch) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({ msg: "Invalid email or password" });
     }
 
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ msg: "Something went wrong, please try again later" });
-  }
-};
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.token,
+      { expiresIn: "1d" }
+    );
 
-const UpdateProfile = async (req, res) => {
-  try {
-    const { photo, username, id } = req.body;
-
-    if (!id) {
-      return res
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ msg: "User ID is required" });
-    }
-
-    const updateUser = await AuthModel.findByIdAndUpdate(id, req.body, {
-      new: true,
-      runValidators: true,
-    });
-
-    if (!updateUser) {
-      return res.status(StatusCodes.NOT_FOUND).json({ msg: `User not found` });
-    }
-
-    // Remove sensitive fields before returning response
-    const updateUserObj = updateUser.toObject();
-    delete updateUserObj.email;
-    delete updateUserObj.password; // Always remove the password
+    const profile = await ProfileModel.findOne({ userId: user._id });
 
     return res.status(StatusCodes.OK).json({
-      msg: "Your profile has been updated successfully",
-      updateUserObj,
+      msg: "Login successful",
+      user: {
+        userId: user._id,
+        role: user.role,
+        username: profile ? profile.username : null,
+      },
+      token,
     });
   } catch (err) {
-    //   console.error(err);
-
-    // Handle validation errors from mongoose
-    if (err.name === "ValidationError") {
-      return res
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ msg: `Validation error: ${err.message}` });
-    }
-
-    // Handle other unexpected errors
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ msg: "Something went wrong, please try again later" });
+    console.log("Login error:", err);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Something went wrong" });
   }
 };
 
+// 3. ADMIN ONLY LOGIN (Strict check for Admin portal)
+const AdminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    console.log("Admin Login attempt:", email);
+
+    const user = await AuthModel.findOne({ email });
+    if (!user || user.role !== "admin") {
+      return res.status(StatusCodes.UNAUTHORIZED).json({ msg: "Unauthorized: Admin access only" });
+    }
+
+    const isMatch = await user.checkpwd(password);
+    if (!isMatch) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({ msg: "Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.token,
+      { expiresIn: "1d" }
+    );
+
+    return res.status(StatusCodes.OK).json({
+      msg: "Admin authorized",
+      user: { userId: user._id, role: user.role },
+      token,
+    });
+  } catch (err) {
+    console.log("Admin login error:", err);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Server error" });
+  }
+};
+
+// 4. ADMIN CREATE PROVIDER (The surgical addition)
+const AdminCreateProvider = async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+    console.log("Admin creating provider:", email);
+
+    if (!username || !email || !password) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ msg: "Provide all fields" });
+    }
+
+    const user = await AuthModel.create({
+      email,
+      password,
+      role: "provider",
+    });
+
+    await ProfileModel.create({
+      userId: user._id,
+      username,
+    });
+
+    return res.status(StatusCodes.CREATED).json({ msg: "Service Provider created successfully" });
+  } catch (err) {
+    console.log("Provider creation error:", err);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Creation failed" });
+  }
+};
+
+// 5. UPDATE PROFILE (Clients/Providers only)
+const UpdateProfile = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const userRole = req.user.role;
+
+    // Reject Admin profile updates as Admins don't have profiles in our design
+    if (userRole === "admin") {
+      return res.status(StatusCodes.FORBIDDEN).json({ msg: "Admins do not have updateable profiles" });
+    }
+
+    const profile = await ProfileModel.findOneAndUpdate(
+      { userId },
+      req.body,
+      { new: true, runValidators: true }
+    );
+
+    return res.status(StatusCodes.OK).json({ msg: "Profile updated", profile });
+  } catch (err) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Update failed" });
+  }
+};
+
+// NEW: UPDATE PASSWORD
+const UpdatePassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const userId = req.user.userId;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ msg: "Please provide both passwords" });
+    }
+
+    const user = await AuthModel.findById(userId);
+    const isPasswordCorrect = await user.checkpwd(oldPassword);
+
+    if (!isPasswordCorrect) {
+      return res.status(StatusCodes.UNAUTHORIZED).json({ msg: "Invalid old password" });
+    }
+
+    user.password = newPassword;
+    await user.save(); // pre-save hook will hash it
+
+    res.status(StatusCodes.OK).json({ msg: "Password updated successfully!" });
+  } catch (err) {
+    console.log("Update password error:", err);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Update failed" });
+  }
+};
+
+// NEW: UPDATE USERNAME (Specific Profile field)
+const UpdateUsername = async (req, res) => {
+  try {
+    const { newUsername } = req.body;
+    const userId = req.user.userId;
+
+    if (!newUsername) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ msg: "Please provide a new username" });
+    }
+
+    const profile = await ProfileModel.findOneAndUpdate(
+      { userId },
+      { username: newUsername },
+      { new: true, runValidators: true }
+    );
+
+    if (!profile) {
+      return res.status(StatusCodes.NOT_FOUND).json({ msg: "Profile not found" });
+    }
+
+    res.status(StatusCodes.OK).json({ msg: "Username updated successfully", username: profile.username });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(StatusCodes.CONFLICT).json({ msg: "Username already exists" });
+    }
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Update failed" });
+  }
+};
+
+// 7. GET CURRENT USER (Surgical Select)
 const GetLoggedInUser = async (req, res) => {
   try {
-    const token = req.headers.authorization;
+    const userId = req.user.userId;
+    // .select("-password") ensures the hashed password never travels to the client
+    const user = await AuthModel.findById(userId).select("-password");
+    const profile = await ProfileModel.findOne({ userId });
 
-    if (!token) {
-      return res
-        .status(StatusCodes.UNAUTHORIZED)
-        .json({ msg: "No token provided" });
-    }
-
-    const actualToken = token.split(" ")[1];
-
-    const decoded = jwt.verify(actualToken, process.env.token);
-
-    const singleUser = await AuthModel.findById({ _id: decoded.userId });
-
-    if (!singleUser) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ msg: "The User has not been found" });
-    }
-
-    const singleuserObj = singleUser.toObject();
-    // delete singleuserObj._id;
-    delete singleuserObj.email;
-    delete singleuserObj.photo;
-    delete singleuserObj.password;
-
-    return res
-      .status(StatusCodes.OK)
-      .json({ msg: "Single user fetched successfully", singleuserObj });
+    return res.status(StatusCodes.OK).json({ user, profile });
   } catch (err) {
-    // console.log(err);
-    if (err.name === "TokenExpiredError") {
-      return res
-        .status(StatusCodes.UNAUTHORIZED)
-        .json({ msg: "Token has expired" });
-    }
-    if (err.name === "JsonWebTokenError") {
-      return res
-        .status(StatusCodes.UNAUTHORIZED)
-        .json({ msg: "Invalid token" });
-    }
-    return res
-      .status(StatusCodes.INTERNAL_SERVER_ERROR)
-      .json({ msg: "Something went wrong, please try again later" });
-  }
-};
-
-const verifyToken = async (req, res, next) => {
-  try {
-    if (req.headers.authorization) {
-      const authHeader = req.headers.authorization;
-      const token = authHeader.replace("Bearer ", "");
-      const decoded = jwt.verify(token, process.env.token);
-      req.token = decoded;
-      res.json({ type: "success" });
-      // next()
-    } else {
-      res.status(StatusCodes.UNAUTHORIZED).json({ msg: "Token is bad" });
-    }
-  } catch (err) {
-    // res.json({ type: 'error', message: 'Please authenticate', details: err })
-    return res.status(StatusCodes.UNAUTHORIZED).json({ msg: "Invalid token" });
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Fetch failed" });
   }
 };
 
 module.exports = {
-  Register,
+  ClientRegister,
   Login,
+  AdminLogin,
+  AdminCreateProvider,
   UpdateProfile,
+  UpdatePassword,
+  UpdateUsername,
   GetLoggedInUser,
-  verifyToken,
 };
