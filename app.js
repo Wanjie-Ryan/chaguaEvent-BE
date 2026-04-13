@@ -12,7 +12,7 @@ const connectionDB = require("./connection/connection");
 const seedAdmin = require("./utils/bootstrap");
 
 const AuthRoute = require("./routes/authRoutes");
-const ReceiverRoute = require("./routes/receiver");
+const ListingRoute = require("./routes/listing");
 const TransactionRoute = require("./routes/transaction");
 const SummariesRoute = require("./routes/summary");
 const FiltersRoute = require("./routes/filters");
@@ -38,7 +38,7 @@ app.use(
 
 // ROUTES
 app.use("/api/auth", AuthRoute);
-app.use("/api/receiver", ReceiverRoute);
+app.use("/api/listings", ListingRoute);
 app.use("/api/transaction", TransactionRoute);
 app.use("/api/summary", SummariesRoute);
 app.use("/api/filter", FiltersRoute);
