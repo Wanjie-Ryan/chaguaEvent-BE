@@ -3,22 +3,21 @@ const app = express();
 const port = process.env.PORT || 3005;
 const cors = require("cors");
 const helmet = require("helmet");
-const xss = require("xss-clean");
 const cookie = require("cookie-parser");
 const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 const { StatusCodes } = require("http-status-codes");
 const connectionDB = require("./connection/connection");
 const seedAdmin = require("./utils/bootstrap");
+const setupSwagger = require("./utils/swagger");
 
 const AuthRoute = require("./routes/authRoutes");
 const ListingRoute = require("./routes/listing");
-const TransactionRoute = require("./routes/transaction");
+const ReviewRoute = require("./routes/reviewRoutes");
 const SummariesRoute = require("./routes/summary");
 const FiltersRoute = require("./routes/filters");
 
 app.use(helmet());
-app.use(xss());
 app.use(cookie());
 app.use(express.json());
 app.set("trust proxy", 1);
@@ -39,9 +38,12 @@ app.use(
 // ROUTES
 app.use("/api/auth", AuthRoute);
 app.use("/api/listings", ListingRoute);
-app.use("/api/transaction", TransactionRoute);
+app.use("/api/reviews", ReviewRoute);
 app.use("/api/summary", SummariesRoute);
 app.use("/api/filter", FiltersRoute);
+
+// Swagger Documentation
+setupSwagger(app);
 
 app.get("/wake-up", (req, res) => {
   res.json({

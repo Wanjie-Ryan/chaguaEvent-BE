@@ -1,6 +1,6 @@
 const AuthModel = require("../models/user");
 const Listing = require("../models/listing");
-const Transaction = require("../models/transaction");
+const Review = require("../models/review");
 const { StatusCodes } = require("http-status-codes");
 
 const GetStats = async (req, res) => {
@@ -8,13 +8,13 @@ const GetStats = async (req, res) => {
     const totalProviders = await AuthModel.countDocuments({ role: "provider" });
     const totalListings = await Listing.countDocuments({ isApproved: true });
     const pendingListings = await Listing.countDocuments({ isApproved: false });
-    const totalInquiries = await Transaction.countDocuments();
+    const totalReviews = await Review.countDocuments();
 
     res.status(StatusCodes.OK).json({
       totalProviders,
       totalListings,
       pendingListings,
-      totalInquiries,
+      totalReviews,
     });
   } catch (err) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: err.message });

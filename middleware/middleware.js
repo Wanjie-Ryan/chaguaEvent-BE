@@ -3,6 +3,7 @@ const { StatusCodes } = require("http-status-codes");
 
 const AuthMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
+  console.log("AuthMiddleware: Header received", !!authHeader);
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(StatusCodes.UNAUTHORIZED).json({ msg: "No Token provided" });
@@ -12,9 +13,11 @@ const AuthMiddleware = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.token);
+    console.log("AuthMiddleware: Token verified", decoded.role);
     req.user = { userId: decoded.userId, role: decoded.role };
     next();
   } catch (err) {
+    console.log("AuthMiddleware: Token verification failed", err.message);
     return res.status(StatusCodes.UNAUTHORIZED).json({ msg: "Not authorized" });
   }
 };
