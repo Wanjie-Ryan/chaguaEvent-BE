@@ -22,16 +22,16 @@ app.use(cookie());
 app.use(express.json());
 app.set("trust proxy", 1);
 app.use(
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+  cors({
+    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:8080"],
+    credentials: true,
+    exposedHeaders: ["ip"],
   })
 );
 app.use(
-  cors({
-    origin: ["http://localhost:3000", "http://localhost:3001"],
-    credentials: true,
-    exposedHeaders: ["ip"],
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
   })
 );
 

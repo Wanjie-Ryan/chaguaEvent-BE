@@ -1,5 +1,6 @@
 const Review = require("../models/review");
 const Listing = require("../models/listing");
+const Profile = require("../models/profile");
 const { StatusCodes } = require("http-status-codes");
 
 // 1. CREATE REVIEW
@@ -47,4 +48,44 @@ const GetProviderReviews = async (req, res) => {
   }
 };
 
-module.exports = { CreateReview, GetListingReviews, GetProviderReviews };
+// 4. GET TOP PROVIDERS (Public)
+const GetTopProviders = async (req, res) => {
+  try {
+    const topProviders = await Review.aggregate([
+      {
+        $group: {
+          _id: "$providerId",
+          averageRating: { $avg: "$rating" },
+          reviewCount: { $sum: 1 },
+        }
+      },
+      { $sort: { averageRating: -1, reviewCount: -1 } },
+      { $limit: 4 },
+      {
+        $lookup: {
+          from: "profiles", // the collection name for Profile is "profiles"
+          localField: "_id",
+          foreignField: "userId",
+          as: "profile"
+        }
+      },
+      { $unwind: "$profile" },
+      {
+        $project: {
+          _id: 1, // This is providerId
+          averageRating: 1,
+          reviewCount: 1,
+          username: "$profile.username",
+          photo: "$profile.photo",
+          bio: "$profile.bio",
+        }
+      }
+    ]);
+
+    res.status(StatusCodes.OK).json({ count: topProviders.length, data: topProviders });
+  } catch (err) {
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: err.message });
+  }
+};
+
+module.exports = { CreateReview, GetListingReviews, GetProviderReviews, GetTopProviders };

@@ -4,6 +4,7 @@ const {
   CreateReview,
   GetListingReviews,
   GetProviderReviews,
+  GetTopProviders,
 } = require("../controller/review");
 const { AuthMiddleware, Authorize } = require("../middleware/middleware");
 
@@ -23,6 +24,17 @@ const { AuthMiddleware, Authorize } = require("../middleware/middleware");
  *       200: { description: Success }
  */
 router.get("/listing/:listingId", GetListingReviews);
+
+/**
+ * @swagger
+ * /api/reviews/top-providers:
+ *   get:
+ *     summary: "Get top 4 highly rated providers"
+ *     tags: [Reviews]
+ *     responses:
+ *       200: { description: Success }
+ */
+router.get("/top-providers", GetTopProviders);
 
 // --- CLIENT ROUTES ---
 /**
