@@ -28,6 +28,10 @@ const authSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    phone: {
+      type: String,
+      match: [/^\+?[0-9]{10,15}$/, "Please provide a valid phone number"],
+    },
   },
   { timestamps: true }
 );

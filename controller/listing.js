@@ -23,7 +23,7 @@ const CreateListing = async (req, res) => {
 // 2. GET APPROVED LISTINGS
 const GetApprovedListings = async (req, res) => {
   try {
-    const listings = await Listing.find({ isApproved: true }).populate("providerId", "email").sort("-createdAt");
+    const listings = await Listing.find({ isApproved: true }).populate("providerId", "email phone").sort("-createdAt");
     res.status(StatusCodes.OK).json({ count: listings.length, data: listings });
   } catch (err) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Fetch failed" });
@@ -33,7 +33,7 @@ const GetApprovedListings = async (req, res) => {
 // 3. GET SINGLE LISTING
 const GetSingleListing = async (req, res) => {
   try {
-    const listing = await Listing.findById(req.params.id).populate("providerId", "email");
+    const listing = await Listing.findById(req.params.id).populate("providerId", "email phone");
     if (!listing) return res.status(StatusCodes.NOT_FOUND).json({ msg: "Listing not found" });
     res.status(StatusCodes.OK).json({ data: listing });
   } catch (err) {
@@ -83,10 +83,27 @@ const DeleteListing = async (req, res) => {
 };
 
 // 7. ADMIN: GET ALL LISTINGS
+const Profile = require("../models/profile");
 const AdminGetAllListings = async (req, res) => {
   try {
-    const listings = await Listing.find({}).populate("providerId", "email").sort("-createdAt");
-    res.status(StatusCodes.OK).json({ count: listings.length, data: listings });
+    const listings = await Listing.find({}).populate("providerId", "email phone").sort("-createdAt");
+
+    // Enrich each listing with the provider's username from Profile
+    const providerIds = [...new Set(listings.map(l => l.providerId?._id?.toString()).filter(Boolean))];
+    const profiles = await Profile.find({ userId: { $in: providerIds } });
+
+    const data = listings.map(l => {
+      const profile = profiles.find(pr => pr.userId.toString() === l.providerId?._id?.toString());
+      return {
+        ...l.toObject(),
+        providerId: {
+          ...(l.providerId?.toObject ? l.providerId.toObject() : l.providerId),
+          username: profile?.username || "Unknown",
+        }
+      };
+    });
+
+    res.status(StatusCodes.OK).json({ count: data.length, data });
   } catch (err) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Admin fetch failed" });
   }

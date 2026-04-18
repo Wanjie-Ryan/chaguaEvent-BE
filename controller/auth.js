@@ -113,8 +113,8 @@ const AdminCreateProvider = async (req, res) => {
   }
 };
 
-// 5. ADMIN VERIFY PROVIDER (New Surgical Endpoint)
-const AdminVerifyProvider = async (req, res) => {
+// 5. ADMIN TOGGLE PROVIDER (Activate / Deactivate)
+const AdminToggleProvider = async (req, res) => {
   try {
     const { id } = req.params;
     const user = await AuthModel.findById(id);
@@ -123,12 +123,46 @@ const AdminVerifyProvider = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ msg: "Service Provider not found" });
     }
 
-    user.isVerified = true;
+    user.isVerified = !user.isVerified;
     await user.save();
 
-    res.status(StatusCodes.OK).json({ msg: "Provider verified successfully. They can now login." });
+    res.status(StatusCodes.OK).json({ msg: user.isVerified ? "Provider activated." : "Provider deactivated.", isVerified: user.isVerified });
   } catch (err) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Verification failed" });
+  }
+};
+
+// 5B. GET ALL PROVIDERS
+const GetAllProviders = async (req, res) => {
+  try {
+    const providers = await AuthModel.find({ role: "provider" }).select("-password");
+    const profiles = await ProfileModel.find({ userId: { $in: providers.map(p => p._id) } });
+
+    const data = providers.map(p => {
+      const profile = profiles.find(pr => pr.userId.toString() === p._id.toString());
+      return { ...p.toObject(), profile };
+    });
+
+    return res.status(StatusCodes.OK).json({ count: data.length, data });
+  } catch (err) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Fetch failed" });
+  }
+};
+
+// 5C. GET ALL CLIENTS
+const GetAllClients = async (req, res) => {
+  try {
+    const clients = await AuthModel.find({ role: "client" }).select("-password");
+    const profiles = await ProfileModel.find({ userId: { $in: clients.map(c => c._id) } });
+
+    const data = clients.map(c => {
+      const profile = profiles.find(pr => pr.userId.toString() === c._id.toString());
+      return { ...c.toObject(), profile };
+    });
+
+    return res.status(StatusCodes.OK).json({ count: data.length, data });
+  } catch (err) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ msg: "Fetch failed" });
   }
 };
 
@@ -230,7 +264,9 @@ module.exports = {
   Login,
   AdminLogin,
   AdminCreateProvider,
-  AdminVerifyProvider,
+  AdminToggleProvider,
+  GetAllProviders,
+  GetAllClients,
   UpdateProfile,
   UpdatePassword,
   UpdateUsername,

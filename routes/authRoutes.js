@@ -5,7 +5,9 @@ const {
   Login,
   AdminLogin,
   AdminCreateProvider,
-  AdminVerifyProvider,
+  AdminToggleProvider,
+  GetAllProviders,
+  GetAllClients,
   UpdateProfile,
   UpdatePassword,
   UpdateUsername,
@@ -102,9 +104,9 @@ router.post("/admin/create-provider", AuthMiddleware, Authorize("admin"), AdminC
 
 /**
  * @swagger
- * /api/auth/admin/verify-provider/{id}:
+ * /api/auth/admin/toggle-provider/{id}:
  *   patch:
- *     summary: Admin manually approves a Service Provider
+ *     summary: Admin manually toggles provider activation
  *     tags: [Admin]
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -113,9 +115,33 @@ router.post("/admin/create-provider", AuthMiddleware, Authorize("admin"), AdminC
  *         required: true
  *         schema: { type: string }
  *     responses:
- *       200: { description: Verified successfully }
+ *       200: { description: Success }
  */
-router.patch("/admin/verify-provider/:id", AuthMiddleware, Authorize("admin"), AdminVerifyProvider);
+router.patch("/admin/toggle-provider/:id", AuthMiddleware, Authorize("admin"), AdminToggleProvider);
+
+/**
+ * @swagger
+ * /api/auth/admin/providers:
+ *   get:
+ *     summary: Admin gets all service providers
+ *     tags: [Admin]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Success }
+ */
+router.get("/admin/providers", AuthMiddleware, Authorize("admin"), GetAllProviders);
+
+/**
+ * @swagger
+ * /api/auth/admin/clients:
+ *   get:
+ *     summary: Admin gets all clients
+ *     tags: [Admin]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Success }
+ */
+router.get("/admin/clients", AuthMiddleware, Authorize("admin"), GetAllClients);
 
 // --- SHARED PROTECTED ROUTES ---
 /**
